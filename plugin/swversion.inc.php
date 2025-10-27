@@ -17,7 +17,7 @@ function plugin_swversion_action()
 	}
 
 	// Service Workerファイルのパス
-	$sw_file = '/sw.js';
+	$sw_file = 'sw.js';
 
 	// ファイルが存在しない場合
 	if (!file_exists($sw_file)) {
