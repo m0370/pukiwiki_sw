@@ -277,7 +277,7 @@ function _toolbar($key, $x = 20, $y = 20){
 <script>
 if ('serviceWorker' in navigator) {
 	window.addEventListener('load', function() {
-		navigator.serviceWorker.register('/sw.js')
+		navigator.serviceWorker.register('/sw.min.js')
 			.then(function(registration) {
 				console.log('Service Worker registered with scope:', registration.scope);
 			})
