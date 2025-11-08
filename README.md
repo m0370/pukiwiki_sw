@@ -16,6 +16,9 @@ https://oncologynote.jp/?5dc8d8f7f6
 
 - **ブラウザ上で簡単更新**: 管理画面からボタン一つでキャッシュバージョンを更新
 - **自動バージョン生成**: 日時ベース（`YYYYMMdd-HHiiss`形式）で自動生成
+- **自動minify生成**: sw.min.js を自動的に生成（v1.1.0以降）
+- **PHPベースの圧縮**: 外部依存なし（npx/terserなど不要）
+- **圧縮率表示**: ファイルサイズ削減率をリアルタイム表示
 - **現在の状態を確認**: 現在のキャッシュバージョンとキャッシュ対象ファイルを一覧表示
 - **セキュリティ**: Basic認証とPKWK_READONLYモードでアクセス制御
 
@@ -27,9 +30,12 @@ https://oncologynote.jp/?5dc8d8f7f6
 
 ```
 /sw.js                          # Service Workerファイル（ルートディレクトリ）
+/sw.min.js                      # Service Worker minifiedファイル（自動生成）
 /skin/pukiwiki.skin.php         # Service Worker登録コード付きskinファイル
 /plugin/swversion.inc.php       # このプラグイン
 ```
+
+**注**: `sw.min.js` は `swversion.inc.php` でバージョン更新時に自動生成されます。手動で作成する必要はありません。
 
 なお、**Service Worker登録コード付きskinファイル**はデフォルトのスキンに以下のscriptを追記することでも作成可能です。
 `</body></html>` の直前にこれを挿入してください。
@@ -39,7 +45,7 @@ https://oncologynote.jp/?5dc8d8f7f6
 <script>
 if ('serviceWorker' in navigator) {
 	window.addEventListener('load', function() {
-		navigator.serviceWorker.register('/sw.js')
+		navigator.serviceWorker.register('/sw.min.js')
 			.then(function(registration) {
 				console.log('Service Worker registered with scope:', registration.scope);
 			})
@@ -54,6 +60,7 @@ if ('serviceWorker' in navigator) {
 ### 2. ファイルの配置場所
 
 - **sw.js**: PukiWikiのルートディレクトリ（index.phpと同じ場所）に配置
+- **sw.min.js**: 自動生成されるため手動配置不要（初回は `?plugin=swversion` でバージョン更新を実行）
 - **pukiwiki.skin.php**: `/skin/`ディレクトリに配置（既存ファイルを上書き）
 - **swversion.inc.php**: `/plugin/`ディレクトリに配置
 
@@ -127,10 +134,11 @@ Basic認証でログインしている必要があります。
 
 ### ファイル書き込み権限
 
-sw.jsファイルに書き込み権限が必要です。パーミッションを確認してください：
+sw.jsとsw.min.jsファイルに書き込み権限が必要です。パーミッションを確認してください：
 
 ```bash
 chmod 644 sw.js
+chmod 644 sw.min.js  # 初回は存在しないため、自動生成後に設定
 ```
 
 Webサーバーのユーザー（通常は `www-data` や `apache`）が書き込める必要があります。
@@ -229,6 +237,7 @@ $new_version = date('Ymd') . '-v' . time();
 your-pukiwiki/
 ├── index.php
 ├── sw.js                       # Service Workerファイル（このプラグインが更新）
+├── sw.min.js                   # Service Worker minifiedファイル（自動生成）
 ├── skin/
 │   └── pukiwiki.skin.php       # Service Worker登録コード含む
 └── plugin/
@@ -257,6 +266,13 @@ m0370 (2025)
 - [Service Worker の紹介 - Google Developers](https://developers.google.com/web/fundamentals/primers/service-workers)
 
 ## バージョン履歴
+
+- **1.1.0** (2025-11-09): 自動minify機能追加
+  - sw.min.js 自動生成機能を追加
+  - PHPベースのJavaScript minification実装
+  - 外部依存なし（npx/terser不要）
+  - ファイルサイズ削減率表示
+  - pukiwiki.skin.phpでsw.min.js使用に変更
 
 - **1.0.0** (2025-10-27): 初回リリース
   - 基本機能実装
