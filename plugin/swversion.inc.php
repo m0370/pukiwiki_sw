@@ -1,11 +1,14 @@
 <?php
 // PukiWiki - Yet another WikiWikiWeb clone.
 // swversion.inc.php
-// Copyright 2025 PukiWiki Community
+// Copyright 2025 m0370
 // License: GPL v2 or (at your option) any later version
 //
-// Service Worker Cache Version Manager Plugin (for Default PukiWiki)
-// Allows administrators to update Service Worker cache version
+// Service Worker Cache Version Manager Plugin
+// Version 1.1.0 (2025-11-09)
+// - Automatic sw.min.js generation with PHP-based minification
+// - No external dependencies (npx/terser not required)
+// - Shows minification statistics (file size reduction)
 
 function plugin_swversion_action()
 {
@@ -18,6 +21,7 @@ function plugin_swversion_action()
 
 	// Service Workerファイルのパス
 	$sw_file = 'sw.js';
+	$sw_min_file = 'sw.min.js';
 
 	// ファイルが存在しない場合
 	if (!file_exists($sw_file)) {
@@ -29,7 +33,7 @@ function plugin_swversion_action()
 
 	// POSTリクエスト（更新実行）
 	if (isset($post['update']) && $post['update'] === 'yes') {
-		return plugin_swversion_update($sw_file);
+		return plugin_swversion_update($sw_file, $sw_min_file);
 	}
 
 	// GETリクエスト（フォーム表示）
@@ -37,7 +41,7 @@ function plugin_swversion_action()
 }
 
 // Service Workerバージョン更新を実行
-function plugin_swversion_update($sw_file)
+function plugin_swversion_update($sw_file, $sw_min_file)
 {
 	// ファイル読み込み
 	$content = file_get_contents($sw_file);
@@ -76,19 +80,65 @@ function plugin_swversion_update($sw_file)
 		);
 	}
 
+	// sw.min.js を自動生成（PHPでminify）
+	$minify_success = false;
+	$minify_error = '';
+
+	try {
+		// 基本的なJavaScript minification
+		$minified = $new_content;
+
+		// コメントを削除（// と /* */ の両方）
+		$minified = preg_replace('!/\*.*?\*/!s', '', $minified);  // /* */ コメント
+		$minified = preg_replace('!//[^\n]*!', '', $minified);    // // コメント
+
+		// 複数の空白を1つに
+		$minified = preg_replace('/\s+/', ' ', $minified);
+
+		// 演算子周りの不要な空白を削除
+		$minified = preg_replace('/\s*([=+\-*\/%<>!&|,;:(){}[\]])\s*/', '$1', $minified);
+
+		// 行頭・行末の空白を削除
+		$minified = trim($minified);
+
+		// ファイルに書き込み
+		if (file_put_contents($sw_min_file, $minified) !== false) {
+			$minify_success = true;
+		} else {
+			$minify_error = 'Failed to write minified file';
+		}
+	} catch (Exception $e) {
+		$minify_error = $e->getMessage();
+	}
+
 	// 成功メッセージ
-	$body = '<div style="padding: 20px; background: #e8f5e9; border-left: 4px solid #4caf50;">';
-	$body .= '<h3 style="color: #2e7d32; margin-top: 0;">✓ Cache version updated successfully</h3>';
-	$body .= '<p><strong>Old version:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px;">' . htmlsc($old_version) . '</code></p>';
-	$body .= '<p><strong>New version:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px;">' . htmlsc($new_version) . '</code></p>';
-	$body .= '<p style="margin-bottom: 0;">All visitors will automatically receive the updated cache on their next visit.</p>';
-	$body .= '</div>';
-	$body .= '<hr>';
-	$body .= '<p><a href="?plugin=swversion">← Back to Service Worker Version Manager</a></p>';
+	$minify_message = '';
+	if ($minify_success) {
+		$original_size = filesize($sw_file);
+		$minified_size = filesize($sw_min_file);
+		$reduction = round((1 - $minified_size / $original_size) * 100, 1);
+		$minify_message = '<p><strong>Minified file:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px;">' . htmlsc($sw_min_file) . '</code> ✓ Generated successfully</p>';
+		$minify_message .= '<p>Size: ' . $original_size . ' bytes → ' . $minified_size . ' bytes (' . $reduction . '% reduction)</p>';
+	} else {
+		$minify_message = '<p style="color: #ff6f00;"><strong>Warning:</strong> Failed to generate minified file.</p>';
+		if (!empty($minify_error)) {
+			$minify_message .= '<p>Error: ' . htmlsc($minify_error) . '</p>';
+		}
+	}
 
 	return array(
 		'msg' => 'Service Worker Version Updated',
-		'body' => $body
+		'body' => <<<EOD
+<div style="padding: 20px; background: #e8f5e9; border-left: 4px solid #4caf50;">
+	<h3 style="color: #2e7d32; margin-top: 0;">✓ Cache version updated successfully</h3>
+	<p><strong>Old version:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px;">{$old_version}</code></p>
+	<p><strong>New version:</strong> <code style="background: #fff; padding: 2px 6px; border-radius: 3px;">{$new_version}</code></p>
+	{$minify_message}
+	<p style="margin-bottom: 0;">All visitors will automatically receive the updated cache on their next visit.</p>
+</div>
+<hr>
+<p><a href="?plugin=swversion">← Back to Service Worker Version Manager</a></p>
+EOD
 	);
 }
 
@@ -162,9 +212,9 @@ function plugin_swversion_show_form($sw_file)
 	$body .= '<div style="background: #fff3e0; padding: 15px; border-left: 4px solid #ff9800; margin-bottom: 20px;">';
 	$body .= '<p><strong>⚠ When to update:</strong></p>';
 	$body .= '<ul>';
-	$body .= '<li>After updating CSS files (pukiwiki.css)</li>';
-	$body .= '<li>After updating JavaScript files (main.js, search2.js)</li>';
-	$body .= '<li>After changing PukiWiki icons or logos</li>';
+	$body .= '<li>After updating CSS files</li>';
+	$body .= '<li>After updating JavaScript files</li>';
+	$body .= '<li>After changing cached images</li>';
 	$body .= '<li>After modifying the STATIC_CACHE_URLS list</li>';
 	$body .= '</ul>';
 	$body .= '<p style="margin-bottom: 0;">Updating the version will force all visitors to download fresh copies of cached resources on their next visit.</p>';
@@ -182,7 +232,7 @@ function plugin_swversion_show_form($sw_file)
 	$body .= '</style>';
 
 	return array(
-		'msg' => 'Service Worker Version Manager (Default PukiWiki)',
+		'msg' => 'Service Worker Version Manager',
 		'body' => $body
 	);
 }
